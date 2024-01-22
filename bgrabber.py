@@ -6,7 +6,6 @@ import socket, sys, ssl, time
 
 common_http_ports = [80, 8080, 10000]
 common_https_ports = [443, 8443]
-user_list = ['root', 'sys', 'www-data', 'mail']
 
 def http_banner_graber(target, p):
     tcp = None
@@ -55,6 +54,9 @@ def smtp_banner_grabber(target, p):
         time.sleep(1.5)
         
         # Creating the request
+        with open(sys.argv[3], 'r') as wordlist:
+            user_list = wordlist.read().splitlines()
+
         for user in user_list:
             request = f"VRFY {user}\r\n"
             tcp.send(request.encode())
@@ -85,9 +87,11 @@ def banner_graber(target, p):
 
 ## Checking if arguments were given ##
 
-if len(sys.argv) != 3:
+if len(sys.argv) < 3:
     print("""Usage: ./bgrabber.py [target] [port]
-Usage 2: py3 bgrabber.py [target] [port]""")
+Usage 2: py3 bgrabber.py [target] [port]
+
+If you want to bruteforce users in smtp, add the path to your usernames wordlist as the last argument""")
 
 else:
     target = str(sys.argv[1])
