@@ -2,7 +2,7 @@
 # Simple banner grabber in python
 # Made by: Sp1d3rM0rph3us
 
-import socket, sys, ssl, time
+import socket, sys, ssl, time, re
 
 common_http_ports = [80, 8080, 10000]
 common_https_ports = [443, 8443]
@@ -52,7 +52,9 @@ def smtp_banner_grabber(target, p):
         tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         tcp.connect((target, p))
         time.sleep(1.5)
-        
+        banner = tcp.recv(1024).decode('utf-8').strip()
+        print(banner)
+
         # Creating the request
         with open(sys.argv[3], 'r') as wordlist:
             user_list = wordlist.read().splitlines()
@@ -60,8 +62,15 @@ def smtp_banner_grabber(target, p):
         for user in user_list:
             request = f"VRFY {user}\r\n"
             tcp.send(request.encode())
-            banner = tcp.recv(1024).decode('utf-8').strip()
-            print(banner)
+            response = tcp.recv(1024).decode('utf-8').strip()
+            fresponse = response.rsplit(maxsplit=1)
+            time.sleep(0.5)
+            if re.search("252", response):
+                if len(fresponse) > 1:
+                    print(f"[+] USER FOUND: {fresponse[1]}")
+                else:
+                    print(f"[+] USER FOUND: {response}")
+
     except Exception as e:
         print("Error: ", e)
 
