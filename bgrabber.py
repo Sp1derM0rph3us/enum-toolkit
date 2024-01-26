@@ -1,121 +1,212 @@
 #!/usr/bin/python3
-# Simple banner grabber in python
+# Banner grabber in python
 # Made by: Sp1d3rM0rph3us
 
 import socket, sys, ssl, time, re
 
-common_http_ports = [80, 8080, 10000]
-common_https_ports = [443, 8443]
+common_http_ports = [80, 8080, 8888]
+common_https_ports = [443, 8443, 4443]
 
-def http_banner_graber(target, p):
-    tcp = None
+
+""" 
+1: Criar o socket -- open_socket()
+2: Criar o socket ssl -- open_ssl_socket()
+3: Fechar o socket -- close_socket()
+4: Fechar o socket ssl -- close_ssl_socket()
+6: Checar se o socket ssl está ativo -- check_ssl_sock_state()
+7: Enviar dados -- send_payload() & send_ssl_payload()
+8: Receber dados -- retrv_data() & retrv_ssl_data()
+9: Executar cada tipo de banner grabbing de acordo com serviço -- main()
+"""
+
+def open_socket(target, p):
     try:
-        tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        tcp.connect((target, p))
-        request = f"HEAD / HTTP/1.1\r\nHost: {target}\r\n\r\n"
-        tcp.send(request.encode())
-        
-        # Retrieving the banner
-        banner = tcp.recv(1024).decode('utf-8').strip()
-        print(banner)
-    except Exception as e:
-        print("Error: ", e)
-    finally:
-        if tcp:
-            tcp.close()
-
-def https_banner_graber(target, p):
-    try:
-        tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        tcp.connect((target, p))
-        
-        # Adding SSL/TLS layer to the connection
-        context = ssl.create_default_context()
-        ssl_socket = context.wrap_socket(tcp, server_hostname=target)
-
-        # Sending the request
-        request = f"HEAD / HTTP/1.1\r\nHost: {target}\r\n\r\n"
-        ssl_socket.send(request.encode())
-
-        # Retrieving the banner
-        banner = ssl_socket.recv(1024).decode('utf-8').strip()
-        print(banner)
-    except Exception as e:
-        print("Error: ", e)
-    finally:
-        if ssl_socket:
-            ssl_socket.close()
-
-def smtp_banner_grabber(target, p):
-    tcp = None
-    try:
-        tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        tcp.connect((target, p))
-        time.sleep(1.5)
-        banner = tcp.recv(1024).decode('utf-8').strip()
-        print(banner)
-
-        # Creating the request
-        with open(sys.argv[3], 'r') as wordlist:
-            user_list = wordlist.read().splitlines()
-
-        for user in user_list:
-            request = f"VRFY {user}\r\n"
-            tcp.send(request.encode())
-            response = tcp.recv(1024).decode('utf-8').strip()
-            fresponse = response.rsplit(maxsplit=1)
-            time.sleep(0.5)
-            if re.search("252", response):
-                if len(fresponse) > 1:
-                    print(f"[+] USER FOUND: {fresponse[1]}")
-                else:
-                    print(f"[+] USER FOUND: {response}")
-
-    except Exception as e:
-        print("Error: ", e)
-
-    finally:
-        if tcp:
-            tcp.close()
-
-
-def banner_graber(target, p):
-    tcp = None
-    try:
-        tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        tcp.connect((target, p))
-        
-        banner = tcp.recv(1024).decode('utf-8').strip()
-        print(banner)
-    except Exception as e:
-            print("Error: ", e)
-    finally:
-        if tcp:
-            tcp.close()
-
-
-## Checking if arguments were given ##
-
-if len(sys.argv) < 3:
-    print("""Usage: ./bgrabber.py [target] [port]
-Usage 2: py3 bgrabber.py [target] [port]
-
-If you want to bruteforce users in smtp, add the path to your usernames wordlist as the last argument""")
-
-else:
-    target = str(sys.argv[1])
-    p = int(sys.argv[2])
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect((target, p))
+        return s
     
-    if p in common_http_ports:
-        print(f"[+] Banner for {target}:{p}")
-        http_banner_graber(target, p)
+    except socket.error as e:
+        print(f"[!] FAILED TO OPEN SOCKET: {e}")
+        return None
 
-    elif p in common_https_ports:
-        print(f"[+] Banner for {target}:{p}")
-        https_banner_graber(target, p)
-    elif p == 25:
-        print(f"[+] Banner for {target}:{p}")
-        smtp_banner_grabber(target, p)
+def open_ssl_socket(target, p):
+    try:
+        s = socket.create_connection((target, p))
+        sup_protocols = s.getsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR)
+        context = ssl.create_default_context()
+        s_sock = context.wrap_socket(s, server_hostname=target)
+        return s_sock
+
+    except ssl.SSLError as ssl_er:
+        print(f"[!] FAILED TO OPEN SSL SOCKET: {ssl_er}")
+        return None
+
+    except socket.error as s_er:
+        print(f"[!] FAILED TO OPEN SSL SOCKET: {s_er}")
+        return None
+    
+def close_socket(s):
+    try:
+        s.close()
+        return True
+    except socket.error as e:
+        print(f"[!] FAILED TO CLOSE SOCKET: {e}")
+        return False
+
+
+def close_ssl_socket(s_sock):
+    try:
+        s_sock.close()
+        return True
+    except (ssl.SSLError, socket.error) as e:
+        print(f"[!] FAILED TO CLOSE SSL SOCKET: {e}")
+        return False
+
+
+def check_sock_state(s):
+    if isinstance(s, socket.socket) and s.fileno() != -1:
+        return True
     else:
-        print(f"[+] Banner for {target}:{p}")
-        banner_graber(target,p)
+        return False
+        
+
+
+def check_ssl_sock_state(s_sock):
+    try:
+        if isinstance(s_sock, ssl.SSLSocket):
+            s_sock.getpeercert()
+            return True
+
+    except (ssl.SSLWantReadError, ssl.SSLWantWriteError):
+        return True
+
+    except (ssl.SSLError, socket.error):
+        pass
+    return False
+
+
+def send_payload(s, payload=None):
+    try:
+        if payload is None:
+            print("No payload loaded.")
+            return False
+        
+        else:
+            s.send(payload.encode())
+            return True
+    except socket.error as e:
+        print(f"[!] FAILED TO SEND PAYLOAD, SOCKET ERROR: {e}")
+        return False
+
+def retrv_data(s):
+    try:
+        if check_sock_state(s):
+            response = s.recv(1024).decode('utf-8').strip() 
+            print(response)
+            return True
+        else:
+            return False
+    except socket.error as e:
+        print(f"[!] FAILED TO RETRIEVE DATA, ERROR: {e}")
+        return False
+
+def send_ssl_payload(s_sock, payload=None):
+    try:
+        if payload is None:
+            return True
+        else:
+            s_sock.send(payload.encode())
+            return True
+
+    except (ssl.SSLError, socket.error) as e:
+        print(f"[!] FAILED TO SEND DATA, ERROR: {e}")
+        return False
+
+def retrv_ssl_data(s_sock):
+    try:
+        sresponse = s_sock.recv(4096).decode('utf-8').strip()
+        print(sresponse)
+        return True
+
+    except (socket.error, ssl.SSLError) as e:
+        print(f"[!] FAILED TO RETRIEVE DATA, ERROR: {e}")
+        return False
+
+
+def main():
+
+    if len(sys.argv) < 3:
+        print("Usage: ./bgrabber.py [target] [port-number] [wordlist]")
+        print("Obs. Wordlist only for smtp user bruteforce.")
+
+    else:
+        target = str(sys.argv[1])
+        p = int(sys.argv[2])
+        #wordlist = ???
+        print(f"[*] Grabbing banner from: {target}:{p}")
+
+        # HTTP banner grabbing
+        if p in common_http_ports:
+            payload = f"HEAD / HTTP/1.1\r\nHost: {target}\r\n\r\n"
+
+            try:
+                s = open_socket(target, p)
+
+                if s and check_sock_state(s):
+                    if send_payload(s, payload):
+                        retrv_data(s)
+                    else:
+                        print("[-] Failed to send payload.")
+                else:
+                    print("[-] Failed to establish connection to target: socket is None.")
+            
+            except Exception as e:
+                print(f"[!] Failed to perform HTTP's banner grabbing: {e}")
+
+            finally:
+                if s:
+                    close_socket(s)
+
+            
+        # HTTPS banner grabbing
+        elif p in common_https_ports:
+            
+            payload = f"HEAD / HTTP/1.1\r\nHost: {target}\r\n\r\n"
+
+            try:
+                s_sock = open_ssl_socket(target, p)
+
+                if s_sock and check_ssl_sock_state(s_sock):
+                    if send_ssl_payload(s_sock, payload):
+                        retrv_ssl_data(s_sock)
+                    else:
+                        print("[-] Failed to send payload.")
+                else:
+                    print("[-] s_sock is None or in an invalid state.")
+
+            except Exception as e:
+                print(f"[!] Failed to perform SSL connection: {e}")
+
+            finally:
+                if s_sock:
+                    close_ssl_socket(s_sock)
+
+        else:
+            # Simple banner grabbing
+                try:
+                    s = open_socket(target, p)
+                    
+                    if s and check_sock_state(s):
+                        retrv_data(s)
+                    else:
+                        print("[-] Failed to establish connection to target.")
+                
+                except Exception as e:
+                    print(f"[!] Failed to perform service's banner grabbing: {e}")
+                
+                finally:
+                    if s:
+                        close_socket(s)
+
+if __name__ == "__main__":
+    main()
