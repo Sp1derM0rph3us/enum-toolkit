@@ -7,18 +7,6 @@ import socket, sys, ssl, time, re
 common_http_ports = [80, 8080, 8888]
 common_https_ports = [443, 8443, 4443]
 
-
-""" 
-1: Criar o socket -- open_socket()
-2: Criar o socket ssl -- open_ssl_socket()
-3: Fechar o socket -- close_socket()
-4: Fechar o socket ssl -- close_ssl_socket()
-6: Checar se o socket ssl está ativo -- check_ssl_sock_state()
-7: Enviar dados -- send_payload() & send_ssl_payload()
-8: Receber dados -- retrv_data() & retrv_ssl_data()
-9: Executar cada tipo de banner grabbing de acordo com serviço -- main()
-"""
-
 def open_socket(target, p):
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
