@@ -20,7 +20,6 @@ def open_socket(target, p):
 def open_ssl_socket(target, p):
     try:
         s = socket.create_connection((target, p))
-        sup_protocols = s.getsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR)
         context = ssl.create_default_context()
         s_sock = context.wrap_socket(s, server_hostname=target)
         return s_sock
