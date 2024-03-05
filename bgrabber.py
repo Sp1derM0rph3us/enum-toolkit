@@ -1,11 +1,12 @@
 #!/usr/bin/python3
-# Banner grabber in python
+# Banner grabber and general purpose brute forcing tool
 # Made by: Sp1d3rM0rph3us
 
 import socket, sys, ssl, time, re
 
-common_http_ports = [80, 8080, 8888]
+common_http_ports = [80, 8080, 8888, 10000]
 common_https_ports = [443, 8443, 4443]
+smtp_common_ports = [25, 465]
 
 def open_socket(target, p):
     try:
@@ -21,6 +22,10 @@ def open_ssl_socket(target, p):
     try:
         s = socket.create_connection((target, p))
         context = ssl.create_default_context()
+        # Ignoring cert verification because we don't care lol
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+
         s_sock = context.wrap_socket(s, server_hostname=target)
         return s_sock
 
@@ -89,8 +94,7 @@ def retrv_data(s):
     try:
         if check_sock_state(s):
             response = s.recv(1024).decode('utf-8').strip() 
-            print(response)
-            return True
+            return True, response
         else:
             return False
     except socket.error as e:
@@ -112,8 +116,7 @@ def send_ssl_payload(s_sock, payload=None):
 def retrv_ssl_data(s_sock):
     try:
         sresponse = s_sock.recv(4096).decode('utf-8').strip()
-        print(sresponse)
-        return True
+        return True, sresponse
 
     except (socket.error, ssl.SSLError) as e:
         print(f"[!] FAILED TO RETRIEVE DATA, ERROR: {e}")
@@ -122,26 +125,32 @@ def retrv_ssl_data(s_sock):
 
 def main():
 
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 3 or len(sys.argv) > 4:
         print("Usage: ./bgrabber.py [target] [port-number] [wordlist]")
         print("Obs. Wordlist only for smtp user bruteforce.")
 
     else:
         target = str(sys.argv[1])
         p = int(sys.argv[2])
-        #wordlist = ???
+
         print(f"[*] Grabbing banner from: {target}:{p}")
 
         # HTTP banner grabbing
         if p in common_http_ports:
-            payload = f"HEAD / HTTP/1.1\r\nHost: {target}\r\n\r\n"
+            req = input(str("[?] Insert the path to be requested: "))
+            payload = f"HEAD {req} HTTP/1.1\r\nHost: {target}\r\n\r\n"
 
             try:
                 s = open_socket(target, p)
 
                 if s and check_sock_state(s):
                     if send_payload(s, payload):
-                        retrv_data(s)
+                        got_response, resp = retrv_data(s)
+                        if got_response:
+                            print(resp)
+                        else:
+                            print("[-] Server returned no response...")
+
                     else:
                         print("[-] Failed to send payload.")
                 else:
@@ -157,15 +166,20 @@ def main():
             
         # HTTPS banner grabbing
         elif p in common_https_ports:
-            
-            payload = f"HEAD / HTTP/1.1\r\nHost: {target}\r\n\r\n"
+           
+            req = input(str("[?] Insert the path to be requested: "))
+            payload = f"HEAD {req} HTTP/1.1\r\nHost: {target}\r\n\r\n"
 
             try:
                 s_sock = open_ssl_socket(target, p)
 
                 if s_sock and check_ssl_sock_state(s_sock):
                     if send_ssl_payload(s_sock, payload):
-                        retrv_ssl_data(s_sock)
+                        got_response, resp = retrv_ssl_data(s_sock)
+                        if got_response:
+                            print(resp)
+                        else:
+                            print("[+] Server returned no response...")
                     else:
                         print("[-] Failed to send payload.")
                 else:
@@ -177,6 +191,68 @@ def main():
             finally:
                 if s_sock:
                     close_ssl_socket(s_sock)
+
+        elif p in smtp_common_ports:
+            wordlist = []
+            with open(sys.argv[3], "r") as file:
+                for l in file:
+                    wordlist.append(l.strip())
+
+            try:
+
+                for word in wordlist:
+                    payload = f"VRFY {word}"
+                    print(f"[*] Attempting user: {word}")
+                    if p == 465:
+                        s_sock = open_ssl_socket(target, p)
+
+                        if s_sock and check_ssl_sock_state(s_sock):
+                            if send_ssl_payload(payload):
+                                get_resp, resp = retrv_ssl_data(s_sock)
+                                if get_resp:
+                                    if resp.startswith("250"):
+                                        print(f"[+] User {word} found")
+                                        if s_sock:
+                                            s_sock.close()
+                            else:
+                                print("[-] Failed to send payload.")
+                        else:
+                            print("[-] s_sock is None or in an invalid state.")
+
+                    else:
+                        s = open_socket(target, p)
+
+                        if s and check_sock_state(s):
+                            if send_payload(payload):
+                                get_resp, resp = retrv_data(s)
+                                if get_resp:
+                                    if resp.startswith("250"):
+                                        print(f"[+] User {word} found")
+                                        if s:
+                                            s.close()
+                                else:
+                                    print("[-] Server returned no response...")
+
+                            else:
+                                print("[-] Failed to send payload.")
+
+                        else:
+                            print("[-] Socket is None or in an invalid state.")
+
+            except Exception as e:
+                print(f"[!] Failed to stablish connection: {e}")
+
+            finally:
+                if s_sock:
+                    s_sock.close()
+
+                elif s:
+                    s.close()
+
+                else:
+                    print("[+] Socket already closed.")
+
+
 
         else:
             # Simple banner grabbing
