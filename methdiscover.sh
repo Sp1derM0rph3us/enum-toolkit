@@ -47,4 +47,7 @@ else
 
     fi
   done
+
+  printf "\r\n"
+  print_red "- Obliterating your privacy, as usual :)\r"
 fi
