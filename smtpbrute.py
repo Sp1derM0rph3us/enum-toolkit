@@ -20,7 +20,7 @@ def brute_force(s, wl, lpi, found_usrs):
             payload = f"VRFY {word}"
             s.send(payload.encode())
             resp = s.recv(1024).decode('UTF-8').strip()
-            if "250" in resp:
+            if "250" in resp or "252" in resp:
                 found_usrs.append(word)
                 print(f"\r[+] FOUND:          {word}\r")
             lpi = idx + 1
