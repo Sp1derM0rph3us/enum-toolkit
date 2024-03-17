@@ -71,7 +71,7 @@ def main():
             print(f"[*] Starting SMTP brute force at {t}\r")
             time.sleep(2)
             while lpi < len(wordlist):
-                next_idx, rst = brute_force(s, wordlist, lpi)
+                next_idx, rst = brute_force(s, wordlist, lpi, found_usrs)
                 if rst == -1:
                     s = open_socket(t, p)
                     lpi = next_idx
