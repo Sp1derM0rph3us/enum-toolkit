@@ -6,7 +6,6 @@ import socket, sys, ssl, time, re
 
 common_http_ports = [80, 8080, 8888, 10000]
 common_https_ports = [443, 8443, 4443]
-smtp_common_ports = [25, 465]
 
 def open_socket(target, p):
     try:
@@ -90,26 +89,28 @@ def send_payload(s, payload=None):
         print(f"[!] FAILED TO SEND PAYLOAD, SOCKET ERROR: {e}")
         return False
 
-def retrv_data(s):
+def retrv_data(s, timeout=20):
     try:
+        s.settimeout(timeout)
         if check_sock_state(s):
             response = s.recv(1024).decode('utf-8').strip() 
             return True, response
         else:
             return False
-    except socket.error as e:
+    except (socket.error, socket.timeout) as e:
         print(f"[!] FAILED TO RETRIEVE DATA, ERROR: {e}")
         return False
 
-def send_ssl_payload(s_sock, payload=None):
+def send_ssl_payload(s_sock, payload=None, timeout=20):
     try:
+        s_sock.settimeout(timeout)
         if payload is None:
             return True
         else:
             s_sock.send(payload.encode())
             return True
 
-    except (ssl.SSLError, socket.error) as e:
+    except (ssl.SSLError, socket.error, socket.timeout) as e:
         print(f"[!] FAILED TO SEND DATA, ERROR: {e}")
         return False
 
@@ -162,6 +163,8 @@ def main():
             finally:
                 if s:
                     close_socket(s)
+                print('\r\n-- Obliterating your privacy, as usual ;)')
+
 
             
         # HTTPS banner grabbing
@@ -191,68 +194,7 @@ def main():
             finally:
                 if s_sock:
                     close_ssl_socket(s_sock)
-
-        elif p in smtp_common_ports:
-            wordlist = []
-            with open(sys.argv[3], "r") as file:
-                for l in file:
-                    wordlist.append(l.strip())
-
-            try:
-
-                for word in wordlist:
-                    payload = f"VRFY {word}"
-                    print(f"[*] Attempting user: {word}")
-                    if p == 465:
-                        s_sock = open_ssl_socket(target, p)
-
-                        if s_sock and check_ssl_sock_state(s_sock):
-                            if send_ssl_payload(payload):
-                                get_resp, resp = retrv_ssl_data(s_sock)
-                                if get_resp:
-                                    if resp.startswith("250"):
-                                        print(f"[+] User {word} found")
-                                        if s_sock:
-                                            s_sock.close()
-                            else:
-                                print("[-] Failed to send payload.")
-                        else:
-                            print("[-] s_sock is None or in an invalid state.")
-
-                    else:
-                        s = open_socket(target, p)
-
-                        if s and check_sock_state(s):
-                            if send_payload(payload):
-                                get_resp, resp = retrv_data(s)
-                                if get_resp:
-                                    if resp.startswith("250"):
-                                        print(f"[+] User {word} found")
-                                        if s:
-                                            s.close()
-                                else:
-                                    print("[-] Server returned no response...")
-
-                            else:
-                                print("[-] Failed to send payload.")
-
-                        else:
-                            print("[-] Socket is None or in an invalid state.")
-
-            except Exception as e:
-                print(f"[!] Failed to stablish connection: {e}")
-
-            finally:
-                if s_sock:
-                    s_sock.close()
-
-                elif s:
-                    s.close()
-
-                else:
-                    print("[+] Socket already closed.")
-
-
+                print('\r\n-- Obliterating your privacy, as usual ;)')
 
         else:
             # Simple banner grabbing
@@ -270,6 +212,7 @@ def main():
                 finally:
                     if s:
                         close_socket(s)
+                    print('\r\n-- Obliterating your privacy, as usual ;)')
 
 if __name__ == "__main__":
     main()
