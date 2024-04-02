@@ -1,8 +1,8 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 # Banner grabber and general purpose brute forcing tool
 # Made by: Sp1d3rM0rph3us
 
-import socket, sys, ssl, time, re
+import socket, sys, ssl, re
 
 common_http_ports = [80, 8080, 8888, 10000]
 common_https_ports = [443, 8443, 4443]
@@ -59,8 +59,6 @@ def check_sock_state(s):
         return True
     else:
         return False
-        
-
 
 def check_ssl_sock_state(s_sock):
     try:
@@ -126,13 +124,13 @@ def retrv_ssl_data(s_sock):
 
 def main():
 
-    if len(sys.argv) < 3 or len(sys.argv) > 4:
-        print("Usage: ./bgrabber.py [target] [port-number] [wordlist]")
-        print("Obs. Wordlist only for smtp user bruteforce.")
+    if len(sys.argv) != 3:
+        print("Usage: ./bgrabber.py [target] [port-number]")
 
     else:
         target = str(sys.argv[1])
         p = int(sys.argv[2])
+        filename = str(sys.argv[3])
 
         print(f"[*] Grabbing banner from: {target}:{p}")
 
@@ -202,7 +200,8 @@ def main():
                     s = open_socket(target, p)
                     
                     if s and check_sock_state(s):
-                        retrv_data(s)
+                        chk, response = retrv_data(s)
+                        print(response)
                     else:
                         print("[-] Failed to establish connection to target.")
                 
