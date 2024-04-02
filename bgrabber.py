@@ -130,7 +130,6 @@ def main():
     else:
         target = str(sys.argv[1])
         p = int(sys.argv[2])
-        filename = str(sys.argv[3])
 
         print(f"[*] Grabbing banner from: {target}:{p}")
 
