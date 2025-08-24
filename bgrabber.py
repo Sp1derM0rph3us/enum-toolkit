@@ -1,216 +1,107 @@
 #!/usr/bin/env python3
-# Banner grabber and general purpose brute forcing tool
-# Made by: Sp1d3rM0rph3us
+# Banner grabbing tool
+# Author: https://github.com/Sp1derM0rph3us
 
-import socket, sys, ssl, re
+import socket, sys, ssl, requests
+from urllib.parse import urlparse
 
-common_http_ports = [80, 8080, 8888, 10000]
-common_https_ports = [443, 8443, 4443]
+COMMON_HTTP_PORTS = [80, 8080, 8888, 10000, 8000]
+COMMON_HTTPS_PORTS = [443, 8443, 4443]
+SSL_PORTS = [443, 8443, 4443, 465, 990]
 
-def open_socket(target, p):
+def open_socket(target, port, use_ssl=False):
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect((target, p))
+        s = socket.create_connection((target, port), timeout=5)
+        if use_ssl:
+            context = ssl.create_default_context()
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+            s = context.wrap_socket(s, server_hostname=target)
         return s
-    
-    except socket.error as e:
+    except Exception as e:
         print(f"[!] FAILED TO OPEN SOCKET: {e}")
         return None
 
-def open_ssl_socket(target, p):
+def close_socket(sock):
     try:
-        s = socket.create_connection((target, p))
-        context = ssl.create_default_context()
-        # Ignoring cert verification because we don't care lol
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
-
-        s_sock = context.wrap_socket(s, server_hostname=target)
-        return s_sock
-
-    except ssl.SSLError as ssl_er:
-        print(f"[!] FAILED TO OPEN SSL SOCKET: {ssl_er}")
-        return None
-
-    except socket.error as s_er:
-        print(f"[!] FAILED TO OPEN SSL SOCKET: {s_er}")
-        return None
-    
-def close_socket(s):
-    try:
-        s.close()
-        return True
-    except socket.error as e:
-        print(f"[!] FAILED TO CLOSE SOCKET: {e}")
-        return False
-
-
-def close_ssl_socket(s_sock):
-    try:
-        s_sock.close()
-        return True
-    except (ssl.SSLError, socket.error) as e:
-        print(f"[!] FAILED TO CLOSE SSL SOCKET: {e}")
-        return False
-
-
-def check_sock_state(s):
-    if isinstance(s, socket.socket) and s.fileno() != -1:
-        return True
-    else:
-        return False
-
-def check_ssl_sock_state(s_sock):
-    try:
-        if isinstance(s_sock, ssl.SSLSocket):
-            s_sock.getpeercert()
-            return True
-
-    except (ssl.SSLWantReadError, ssl.SSLWantWriteError):
-        return True
-
-    except (ssl.SSLError, socket.error):
+        sock.close()
+    except:
         pass
-    return False
 
-
-def send_payload(s, payload=None):
+def send_payload(sock, payload=None):
+    if not payload:
+        return False
     try:
-        if payload is None:
-            print("No payload loaded.")
-            return False
-        
-        else:
-            s.send(payload.encode())
-            return True
-    except socket.error as e:
-        print(f"[!] FAILED TO SEND PAYLOAD, SOCKET ERROR: {e}")
+        sock.send(payload.encode())
+        return True
+    except Exception as e:
+        print(f"[!] FAILED TO SEND PAYLOAD: {e}")
         return False
 
-def retrv_data(s, timeout=20):
+def receive_data(sock, timeout=5):
     try:
-        s.settimeout(timeout)
-        if check_sock_state(s):
-            response = s.recv(1024).decode('utf-8').strip() 
-            return True, response
-        else:
-            return False
-    except (socket.error, socket.timeout) as e:
-        print(f"[!] FAILED TO RETRIEVE DATA, ERROR: {e}")
-        return False
+        sock.settimeout(timeout)
+        data = sock.recv(4096).decode(errors="ignore").strip()
+        return True, data
+    except Exception as e:
+        print(f"[!] FAILED TO RETRIEVE DATA: {e}")
+        return False, None
 
-def send_ssl_payload(s_sock, payload=None, timeout=20):
+def grab_with_requests(url):
     try:
-        s_sock.settimeout(timeout)
-        if payload is None:
-            return True
-        else:
-            s_sock.send(payload.encode())
-            return True
+        print(f"[*] Using requests to grab banner from {url}")
+        resp = requests.get(url, timeout=5, verify=False)
+        print(f"[+] Status code: {resp.status_code}")
+        print("--- Headers ---")
+        for h, v in resp.headers.items():
+            print(f"{h}: {v}")
+    except Exception as e:
+        print(f"[!] Requests failed: {e}")
 
-    except (ssl.SSLError, socket.error, socket.timeout) as e:
-        print(f"[!] FAILED TO SEND DATA, ERROR: {e}")
-        return False
+def banner_grab_socket(target, port, use_ssl=False):
+    path = input("[?] Insert the path to be requested (HTTP/HTTPS only, enter '/' for root): ") \
+        if port in COMMON_HTTP_PORTS + COMMON_HTTPS_PORTS else None
+    payload = f"HEAD {path} HTTP/1.1\r\nHost: {target}\r\n\r\n" if path else None
 
-def retrv_ssl_data(s_sock):
-    try:
-        sresponse = s_sock.recv(4096).decode('utf-8').strip()
-        return True, sresponse
+    sock = open_socket(target, port, use_ssl=use_ssl)
+    if not sock:
+        print("[-] Failed to establish connection.")
+        return
 
-    except (socket.error, ssl.SSLError) as e:
-        print(f"[!] FAILED TO RETRIEVE DATA, ERROR: {e}")
-        return False
+    if payload:
+        send_payload(sock, payload)
 
+    got, data = receive_data(sock)
+    if got and data:
+        print(data)
+    else:
+        print("[-] Server returned no response...")
+
+    close_socket(sock)
 
 def main():
+    if len(sys.argv) < 2:
+        print(f"Usage: {sys.argv[0]} [target] [optional-port]")
+        sys.exit(1)
 
-    if len(sys.argv) != 3:
-        print("Usage: ./bgrabber.py [target] [port-number]")
+    target = sys.argv[1]
+    port = int(sys.argv[2]) if len(sys.argv) >= 3 else None
 
-    else:
-        target = str(sys.argv[1])
-        p = int(sys.argv[2])
+    if target.startswith(("http://", "https://")):
+        grab_with_requests(target)
+        print("\n-- Obliterating your privacy, as usual ;) --")
+        return
 
-        print(f"[*] Grabbing banner from: {target}:{p}")
+    if not port:
+        print("[-] Port is required for non-FQDN targets")
+        sys.exit(1)
 
-        # HTTP banner grabbing
-        if p in common_http_ports:
-            req = input(str("[?] Insert the path to be requested: "))
-            payload = f"HEAD {req} HTTP/1.1\r\nHost: {target}\r\n\r\n"
+    print(f"[*] Grabbing banner from: {target}:{port}")
 
-            try:
-                s = open_socket(target, p)
+    use_ssl = port in SSL_PORTS
 
-                if s and check_sock_state(s):
-                    if send_payload(s, payload):
-                        got_response, resp = retrv_data(s)
-                        if got_response:
-                            print(resp)
-                        else:
-                            print("[-] Server returned no response...")
-
-                    else:
-                        print("[-] Failed to send payload.")
-                else:
-                    print("[-] Failed to establish connection to target: socket is None.")
-            
-            except Exception as e:
-                print(f"[!] Failed to perform HTTP's banner grabbing: {e}")
-
-            finally:
-                if s:
-                    close_socket(s)
-                print('\r\n-- Obliterating your privacy, as usual ;)')
-
-
-            
-        # HTTPS banner grabbing
-        elif p in common_https_ports:
-           
-            req = input(str("[?] Insert the path to be requested: "))
-            payload = f"HEAD {req} HTTP/1.1\r\nHost: {target}\r\n\r\n"
-
-            try:
-                s_sock = open_ssl_socket(target, p)
-
-                if s_sock and check_ssl_sock_state(s_sock):
-                    if send_ssl_payload(s_sock, payload):
-                        got_response, resp = retrv_ssl_data(s_sock)
-                        if got_response:
-                            print(resp)
-                        else:
-                            print("[+] Server returned no response...")
-                    else:
-                        print("[-] Failed to send payload.")
-                else:
-                    print("[-] s_sock is None or in an invalid state.")
-
-            except Exception as e:
-                print(f"[!] Failed to perform SSL connection: {e}")
-
-            finally:
-                if s_sock:
-                    close_ssl_socket(s_sock)
-                print('\r\n-- Obliterating your privacy, as usual ;)')
-
-        else:
-            # Simple banner grabbing
-                try:
-                    s = open_socket(target, p)
-                    
-                    if s and check_sock_state(s):
-                        chk, response = retrv_data(s)
-                        print(response)
-                    else:
-                        print("[-] Failed to establish connection to target.")
-                
-                except Exception as e:
-                    print(f"[!] Failed to perform service's banner grabbing: {e}")
-                
-                finally:
-                    if s:
-                        close_socket(s)
-                    print('\r\n-- Obliterating your privacy, as usual ;)')
+    banner_grab_socket(target, port, use_ssl=use_ssl)
+    print("\n-- Obliterating your privacy, as usual ;) --")
 
 if __name__ == "__main__":
     main()
