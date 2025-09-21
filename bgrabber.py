@@ -5,13 +5,13 @@
 import socket, sys, ssl, requests
 from urllib.parse import urlparse
 
-COMMON_HTTP_PORTS = [80, 8080, 8888, 10000, 8000]
+COMMON_HTTP_PORTS = [80, 8080, 8888, 10000, 8000, 2080]
 COMMON_HTTPS_PORTS = [443, 8443, 4443]
-SSL_PORTS = [443, 8443, 4443, 465, 990]
+SSL_PORTS = [443, 8443, 4443, 465, 990, 5443]
 
 def open_socket(target, port, use_ssl=False):
     try:
-        s = socket.create_connection((target, port), timeout=5)
+        s = socket.create_connection((target, port), timeout=20)
         if use_ssl:
             context = ssl.create_default_context()
             context.check_hostname = False
