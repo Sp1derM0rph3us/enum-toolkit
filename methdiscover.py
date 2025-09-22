@@ -36,7 +36,7 @@ def main():
                 print(f'[-] Failed to retrieve accepted methods: {err}')
                 return -1
 
-        except requests.TimeoutError as err:
+        except requests.exceptions.Timeout as err:
             print(f'[-] Unable to get methods: {err}')
             return -1
 
